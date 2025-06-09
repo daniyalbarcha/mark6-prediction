@@ -40,13 +40,16 @@ class LotteryAnalyzer:
         return df
 
     def detect_sequential_patterns(self, data):
-        """Detect sequential patterns like +1, +2, etc. based on user's observation"""
+        """Detect sequential patterns in the data"""
         patterns = {
             'plus_one_sequences': [],
             'arithmetic_progressions': [],
             'repeating_increments': [],
             'position_correlations': {}
         }
+        
+        if data.empty:
+            return patterns
         
         # Analyze sequential patterns between consecutive draws
         for i in range(len(data) - 1):
@@ -66,29 +69,35 @@ class LotteryAnalyzer:
                     'next': next_draw,
                     'plus_one_count': plus_one_count
                 })
-        
-        # Analyze position-based correlations
-        for pos in range(1, 6):
-            correlations = []
-            for i in range(len(data) - 1):
-                curr_val = data.iloc[i][f'number{pos}']
-                next_val = data.iloc[i+1][f'number{pos}']
-                diff = next_val - curr_val
-                correlations.append(diff)
             
-            patterns['position_correlations'][f'position_{pos}'] = {
-                'mean_diff': np.mean(correlations),
-                'common_diffs': pd.Series(correlations).value_counts().head(5).to_dict()
-            }
+            # Analyze position-based correlations
+            for pos in range(5):
+                curr_val = current_draw[pos]
+                next_val = next_draw[pos]
+                diff = next_val - curr_val
+                
+                if f'position_{pos+1}' not in patterns['position_correlations']:
+                    patterns['position_correlations'][f'position_{pos+1}'] = {
+                        'mean_diff': diff,
+                        'common_diffs': {diff: 1}
+                    }
+                else:
+                    pos_stats = patterns['position_correlations'][f'position_{pos+1}']
+                    pos_stats['mean_diff'] = (pos_stats['mean_diff'] + diff) / 2
+                    pos_stats['common_diffs'][diff] = pos_stats['common_diffs'].get(diff, 0) + 1
         
         return patterns
 
     def predict_with_sequential_logic(self, last_numbers, target_date, use_patterns=True):
-        """Enhanced prediction using sequential pattern logic"""
+        """Enhanced prediction using sequential pattern logic with weekday consideration"""
         base_prediction = self.predict_next_numbers(last_numbers, target_date)
         
         if not use_patterns:
             return base_prediction
+        
+        # Get weekday-specific patterns if available
+        weekday = target_date.weekday()
+        weekday_name = target_date.strftime('%A')
         
         # Apply sequential logic based on patterns
         enhanced_prediction = []
@@ -103,12 +112,19 @@ class LotteryAnalyzer:
                 base_num + 2,  # +2 pattern
             ]
             
+            # Add weekday-specific numbers if available
+            if hasattr(self, 'patterns') and weekday_name in self.patterns.get('weekday_patterns', {}):
+                weekday_patterns = self.patterns['weekday_patterns'][weekday_name]
+                avg_num = round(weekday_patterns['avg_numbers'][i])
+                if 1 <= avg_num <= 39:
+                    potential_numbers.append(avg_num)
+            
             # Filter valid numbers (1-39) and avoid duplicates
             valid_numbers = [n for n in potential_numbers if 1 <= n <= 39 and n not in used_numbers]
             
             if valid_numbers:
-                # Weight towards +1 pattern based on user's observation
-                weights = [0.4, 0.3, 0.2, 0.1][:len(valid_numbers)]
+                # Weight towards weekday-specific patterns if available
+                weights = [0.3, 0.25, 0.2, 0.15, 0.1][:len(valid_numbers)]
                 chosen = np.random.choice(valid_numbers, p=weights/np.sum(weights))
                 enhanced_prediction.append(chosen)
                 used_numbers.add(chosen)
@@ -120,8 +136,9 @@ class LotteryAnalyzer:
         return sorted(enhanced_prediction)
 
     def predict_multiple_sets(self, last_numbers, target_date, count=50, use_patterns=True):
-        """Generate multiple prediction sets"""
+        """Generate multiple prediction sets with weekday consideration"""
         predictions = []
+        weekday_name = target_date.strftime('%A')
         
         for i in range(count):
             if use_patterns:
@@ -142,7 +159,8 @@ class LotteryAnalyzer:
             predictions.append({
                 'set_number': i + 1,
                 'numbers': sorted(pred),
-                'prediction_method': 'pattern_based' if use_patterns else 'ml_based'
+                'prediction_method': 'pattern_based' if use_patterns else 'ml_based',
+                'weekday': weekday_name
             })
         
         return predictions
@@ -195,8 +213,11 @@ class LotteryAnalyzer:
         }
 
     def train_models(self, data):
-        """Train separate models for each number"""
+        """Train separate models for each number with weekday consideration"""
         df = self.prepare_features(data)
+        
+        # Store patterns for later use
+        self.patterns = self.analyze_patterns(df)
         
         X = df[self.features]
         self.scaler.fit(X)
@@ -247,44 +268,65 @@ class LotteryAnalyzer:
         return sorted(predictions)
 
     def analyze_patterns(self, df):
-        """Analyze historical patterns"""
-        analysis = {
-            'hot_numbers': {},
-            'cold_numbers': {},
-            'number_frequency': {},
-            'common_pairs': {},
-            'day_statistics': {},
-            'sequential_patterns': self.detect_sequential_patterns(df)
+        """Analyze historical patterns with weekday consideration"""
+        patterns = {
+            'weekday_patterns': {},
+            'general_patterns': self.detect_sequential_patterns(df),
+            'day_statistics': {
+                'number1': {},
+                'number2': {},
+                'number3': {},
+                'number4': {},
+                'number5': {}
+            },
+            'sequential_patterns': {
+                'plus_one_sequences': [],
+                'arithmetic_progressions': [],
+                'repeating_increments': [],
+                'position_correlations': {}
+            }
         }
         
-        # Number frequency
-        for i in range(1, 6):
-            col = f'number{i}'
-            freq = df[col].value_counts()
-            analysis['number_frequency'][i] = freq.to_dict()
+        # Analyze patterns for each weekday
+        for day in range(7):  # 0-6 (Monday to Sunday)
+            day_data = df[df['date'].dt.weekday == day]
+            if not day_data.empty:
+                weekday_name = day_data.iloc[0]['date'].strftime('%A')
+                day_sequential_patterns = self.detect_sequential_patterns(day_data)
+                
+                patterns['weekday_patterns'][weekday_name] = {
+                    'sequential_patterns': day_sequential_patterns,
+                    'avg_numbers': [
+                        day_data[f'number{i}'].mean() for i in range(1, 6)
+                    ],
+                    'most_common': [
+                        day_data[f'number{i}'].value_counts().head(3).to_dict() 
+                        for i in range(1, 6)
+                    ]
+                }
+                
+                # Add day statistics in the correct format
+                for num in range(1, 6):
+                    patterns['day_statistics'][f'number{num}'][day] = day_data[f'number{num}'].mean()
+                
+                # Update sequential patterns
+                patterns['sequential_patterns']['plus_one_sequences'].extend(day_sequential_patterns['plus_one_sequences'])
+                patterns['sequential_patterns']['arithmetic_progressions'].extend(day_sequential_patterns.get('arithmetic_progressions', []))
+                patterns['sequential_patterns']['repeating_increments'].extend(day_sequential_patterns.get('repeating_increments', []))
+                
+                # Merge position correlations
+                for pos, corr in day_sequential_patterns.get('position_correlations', {}).items():
+                    if pos not in patterns['sequential_patterns']['position_correlations']:
+                        patterns['sequential_patterns']['position_correlations'][pos] = corr
+                    else:
+                        # Average the correlations
+                        existing = patterns['sequential_patterns']['position_correlations'][pos]
+                        patterns['sequential_patterns']['position_correlations'][pos] = {
+                            'mean_diff': (existing['mean_diff'] + corr['mean_diff']) / 2,
+                            'common_diffs': {**existing['common_diffs'], **corr['common_diffs']}
+                        }
         
-        # Hot and cold numbers (last 10 draws)
-        recent = df.head(10)
-        all_recent = []
-        for i in range(1, 6):
-            all_recent.extend(recent[f'number{i}'].tolist())
-        
-        freq = pd.Series(all_recent).value_counts()
-        analysis['hot_numbers'] = freq.head(5).to_dict()
-        analysis['cold_numbers'] = freq.tail(5).to_dict()
-        
-        # Day of week statistics
-        df['dayofweek'] = pd.to_datetime(df['date']).dt.weekday
-        day_stats = df.groupby('dayofweek').agg({
-            'number1': 'mean',
-            'number2': 'mean',
-            'number3': 'mean',
-            'number4': 'mean',
-            'number5': 'mean'
-        }).round(2)
-        analysis['day_statistics'] = day_stats.to_dict()
-        
-        return analysis
+        return patterns
 
     def save_models(self, filename='lottery_models.joblib'):
         """Save trained models"""
