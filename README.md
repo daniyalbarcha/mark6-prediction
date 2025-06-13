@@ -1,62 +1,83 @@
-# 🎲 Lottery Predictor Pro
+# Mark 6 Lottery Predictor Pro
 
-A sophisticated lottery prediction tool that combines web scraping, machine learning, and pattern analysis to predict lottery numbers. Built with Streamlit, this application provides an interactive interface for analyzing historical lottery data and generating predictions.
+An advanced prediction tool for Hong Kong Mark 6 lottery using machine learning and pattern analysis.
 
-## 🚀 Features
+## Features
 
-- **Data Collection**: Scrapes historical lottery data automatically
-- **Pattern Analysis**: Detects sequential patterns and correlations
-- **ML Predictions**: Uses Random Forest models for number prediction
-- **Multiple Prediction Modes**: Single prediction, reroll, and bulk predictions
-- **Interactive Visualizations**: Comprehensive data analysis and trends
-- **Pattern-Based Logic**: Incorporates observed lottery number patterns
-
-## 📋 Requirements
-
-- Python 3.7+
-- Required packages listed in `requirements.txt`
-
-## 🛠️ Installation
+- **Data Collection**
+  - Automated web scraping of historical Mark 6 results
+  - Support for custom date ranges
+  - CSV data export and import
+  
+- **Advanced Analysis**
+  - Number frequency analysis
+  - Pattern detection
+  - Even/Odd distribution
+  - High/Low number analysis
+  - Sequential pattern analysis
+  
+- **Predictions**
+  - Machine learning-based predictions
+  - Support for multiple prediction methods
+  - Next draw date predictions (Tue/Thu/Sat)
+  - Main numbers and extra number predictions
+  
+- **Visualization**
+  - Interactive charts and graphs
+  - Number frequency distribution
+  - Historical trends
+  - Pattern visualization
+  
+## Installation
 
 1. Clone the repository:
-```bash
-git clone <your-repository-url>
-cd lottery-predictor-pro
-```
+   ```bash
+   git clone https://github.com/daniyalbarcha/mark6-prediction.git
+   cd mark6-prediction
+   ```
 
 2. Install required packages:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+## Usage
+
+Run the Streamlit app:
 ```bash
-pip install -r requirements.txt
+streamlit run streamlit_app.py
 ```
 
-3. Run the application:
-```bash
-streamlit run main.py
-```
+The app will open in your default web browser. You can:
+1. Choose to scrape new data or upload existing data
+2. View detailed analysis and visualizations
+3. Generate predictions for upcoming draws
 
-## 💻 Usage
+## Requirements
 
-1. Launch the application
-2. Choose data source (scrape new data or upload existing)
-3. View analysis and predictions
-4. Use various prediction modes:
-   - Single prediction
-   - Reroll prediction
-   - Multiple prediction sets
-   - Pattern-based predictions
+- Python 3.8+
+- Streamlit
+- Pandas
+- Plotly
+- BeautifulSoup4
+- NumPy
+- Requests
 
-## 📊 Analysis Features
+## Data Structure
 
-- Hot and cold numbers
-- Time-based analysis
-- Sequential pattern detection
-- Position-based correlations
-- Multiple prediction confidence scoring
+The tool uses the following data format:
+- `date`: Draw date
+- `number1` through `number6`: Main numbers
+- `extra`: Extra/special number
 
-## 🔒 Security Note
+## Contributing
 
-This tool is for educational purposes only. Please check your local regulations regarding lottery predictions and gambling.
+Feel free to submit issues, fork the repository, and create pull requests for any improvements.
 
-## 📝 License
+## License
 
-MIT License 
+MIT License - feel free to use this code for any purpose.
+
+## Disclaimer
+
+This tool is for entertainment purposes only. Lottery predictions are based on historical data analysis and cannot guarantee future results. 
