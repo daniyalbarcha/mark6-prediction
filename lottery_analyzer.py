@@ -11,8 +11,9 @@ class LotteryAnalyzer:
         self.scaler = StandardScaler()
         self.models = []
         self.features = ['dayofweek', 'month', 'day', 'year',
-                        'last_num1', 'last_num2', 'last_num3', 'last_num4', 'last_num5',
-                        'avg_num1', 'avg_num2', 'avg_num3', 'avg_num4', 'avg_num5']
+                        'last_num1', 'last_num2', 'last_num3', 'last_num4', 'last_num5', 'last_num6',
+                        'avg_num1', 'avg_num2', 'avg_num3', 'avg_num4', 'avg_num5', 'avg_num6',
+                        'last_extra', 'avg_extra']
         self.prediction_history = []
     
     def prepare_features(self, df):
@@ -28,11 +29,15 @@ class LotteryAnalyzer:
         df['day'] = df['date'].dt.day
         df['year'] = df['date'].dt.year
         
-        # Calculate rolling averages and last numbers
-        for i in range(1, 6):
+        # Calculate rolling averages and last numbers for main numbers
+        for i in range(1, 7):
             col = f'number{i}'
             df[f'avg_num{i}'] = df[col].rolling(window=5, min_periods=1).mean()
             df[f'last_num{i}'] = df[col].shift(1)
+        
+        # Calculate rolling averages and last numbers for extra number
+        df['avg_extra'] = df['extra'].rolling(window=5, min_periods=1).mean()
+        df['last_extra'] = df['extra'].shift(1)
         
         # Fill NaN values with mean
         df = df.fillna(df.mean())
@@ -90,42 +95,50 @@ class LotteryAnalyzer:
 
     def predict_with_sequential_logic(self, last_numbers, target_date, use_patterns=True):
         """Enhanced prediction using sequential pattern logic with weekday consideration"""
-        base_prediction = self.predict_next_numbers(last_numbers, target_date)
+        base_predictions, base_extra = self.predict_next_numbers(last_numbers, target_date)
         
         if not use_patterns:
-            return base_prediction
+            return base_predictions, base_extra
         
         # Get weekday-specific patterns if available
         weekday = target_date.weekday()
         weekday_name = target_date.strftime('%A')
         
-        # Apply sequential logic based on patterns
+        # Apply sequential logic based on patterns for main numbers
         enhanced_prediction = []
         used_numbers = set()
         
-        for i, base_num in enumerate(base_prediction):
+        for base_num in base_predictions:
             # Add some randomness based on observed patterns
             potential_numbers = [
                 base_num,
-                base_num + 1,  # +1 pattern
-                base_num - 1,  # -1 pattern
-                base_num + 2,  # +2 pattern
+                min(49, base_num + 1),  # +1 pattern
+                max(1, base_num - 1),   # -1 pattern
+                min(49, base_num + 2),  # +2 pattern
             ]
             
             # Add weekday-specific numbers if available
             if hasattr(self, 'patterns') and weekday_name in self.patterns.get('weekday_patterns', {}):
                 weekday_patterns = self.patterns['weekday_patterns'][weekday_name]
-                avg_num = round(weekday_patterns['avg_numbers'][i])
-                if 1 <= avg_num <= 39:
-                    potential_numbers.append(avg_num)
+                for avg_num in weekday_patterns.get('avg_numbers', []):
+                    avg_num = round(avg_num)
+                    if 1 <= avg_num <= 49:
+                        potential_numbers.append(avg_num)
             
-            # Filter valid numbers (1-39) and avoid duplicates
-            valid_numbers = [n for n in potential_numbers if 1 <= n <= 39 and n not in used_numbers]
+            # Filter valid numbers (1-49) and avoid duplicates
+            valid_numbers = [n for n in potential_numbers if 1 <= n <= 49 and n not in used_numbers]
             
             if valid_numbers:
-                # Weight towards weekday-specific patterns if available
-                weights = [0.3, 0.25, 0.2, 0.15, 0.1][:len(valid_numbers)]
-                chosen = np.random.choice(valid_numbers, p=weights/np.sum(weights))
+                # Create weights array of the same size as valid_numbers
+                num_weights = len(valid_numbers)
+                weights = np.array([0.3, 0.25, 0.2, 0.15, 0.1][:num_weights])
+                # If we have more numbers than weights, pad with minimum weight
+                if len(weights) < num_weights:
+                    weights = np.pad(weights, (0, num_weights - len(weights)), constant_values=0.1)
+                # Normalize weights
+                weights = weights / np.sum(weights)
+                # Choose number
+                chosen = np.random.choice(valid_numbers, p=weights)
                 enhanced_prediction.append(chosen)
                 used_numbers.add(chosen)
             else:
@@ -133,7 +146,40 @@ class LotteryAnalyzer:
                 enhanced_prediction.append(base_num)
                 used_numbers.add(base_num)
         
-        return sorted(enhanced_prediction)
+        # Handle extra number similarly but allow it to be same as main numbers
+        potential_extra = [
+            base_extra,
+            min(49, base_extra + 1),
+            max(1, base_extra - 1),
+            min(49, base_extra + 2)
+        ]
+        
+        # Add weekday-specific numbers for extra
+        if hasattr(self, 'patterns') and weekday_name in self.patterns.get('weekday_patterns', {}):
+            weekday_patterns = self.patterns['weekday_patterns'][weekday_name]
+            if 'avg_extra' in weekday_patterns:
+                avg_extra = round(weekday_patterns['avg_extra'])
+                if 1 <= avg_extra <= 49:
+                    potential_extra.append(avg_extra)
+        
+        # Filter valid extra numbers (1-49)
+        valid_extra = [n for n in potential_extra if 1 <= n <= 49]
+        
+        if valid_extra:
+            # Create weights array of the same size as valid_extra
+            num_weights = len(valid_extra)
+            weights = np.array([0.4, 0.3, 0.2, 0.1][:num_weights])
+            # If we have more numbers than weights, pad with minimum weight
+            if len(weights) < num_weights:
+                weights = np.pad(weights, (0, num_weights - len(weights)), constant_values=0.1)
+            # Normalize weights
+            weights = weights / np.sum(weights)
+            # Choose extra number
+            enhanced_extra = np.random.choice(valid_extra, p=weights)
+        else:
+            enhanced_extra = base_extra
+        
+        return sorted(enhanced_prediction), enhanced_extra
 
     def predict_multiple_sets(self, last_numbers, target_date, count=50, use_patterns=True):
         """Generate multiple prediction sets with weekday consideration"""
@@ -142,9 +188,9 @@ class LotteryAnalyzer:
         
         for i in range(count):
             if use_patterns:
-                pred = self.predict_with_sequential_logic(last_numbers, target_date, use_patterns=True)
+                pred, extra_pred = self.predict_with_sequential_logic(last_numbers, target_date, use_patterns=True)
             else:
-                pred = self.predict_next_numbers(last_numbers, target_date)
+                pred, extra_pred = self.predict_next_numbers(last_numbers, target_date)
             
             # Add some variation for multiple predictions
             if i > 0:
@@ -170,7 +216,7 @@ class LotteryAnalyzer:
         # Use different random seed for variety
         np.random.seed(int(datetime.now().timestamp()) % 1000)
         
-        new_prediction = self.predict_with_sequential_logic(last_numbers, target_date)
+        new_prediction, new_extra = self.predict_with_sequential_logic(last_numbers, target_date)
         
         # Ensure it's different from previous prediction if provided
         if previous_prediction and new_prediction == previous_prediction:
@@ -186,10 +232,11 @@ class LotteryAnalyzer:
         self.prediction_history.append({
             'timestamp': datetime.now(),
             'prediction': new_prediction,
+            'extra': new_extra,
             'method': 'reroll'
         })
         
-        return sorted(new_prediction)
+        return sorted(new_prediction), new_extra
 
     def analyze_prediction_confidence(self, predictions_list):
         """Analyze confidence in predictions based on frequency"""
@@ -224,11 +271,18 @@ class LotteryAnalyzer:
         X_scaled = self.scaler.transform(X)
         
         self.models = []
-        for i in range(1, 6):
+        # Train models for main numbers
+        for i in range(1, 7):
             y = df[f'number{i}']
             model = RandomForestRegressor(n_estimators=100, random_state=42)
             model.fit(X_scaled, y)
             self.models.append(model)
+        
+        # Train model for extra number
+        y_extra = df['extra']
+        model_extra = RandomForestRegressor(n_estimators=100, random_state=42)
+        model_extra.fit(X_scaled, y_extra)
+        self.models.append(model_extra)
         
         return self.models
 
@@ -242,30 +296,39 @@ class LotteryAnalyzer:
             'year': [target_date.year]
         })
         
-        # Add last numbers and their averages
-        for i in range(5):
+        # Add last numbers and their averages for main numbers
+        for i in range(6):
             pred_features[f'last_num{i+1}'] = last_numbers[i]
             pred_features[f'avg_num{i+1}'] = last_numbers[i]  # Using last number as average
+        
+        # Add last extra number and its average
+        pred_features['last_extra'] = last_numbers[6]  # Last position is extra number
+        pred_features['avg_extra'] = last_numbers[6]  # Using last number as average
         
         # Scale features
         X_pred = self.scaler.transform(pred_features[self.features])
         
-        # Make predictions
+        # Make predictions for main numbers
         predictions = []
         used_numbers = set()
         
-        for model in self.models:
+        # Predict main numbers (1-49 range for Mark 6)
+        for model in self.models[:-1]:  # All but last model (which is for extra number)
             pred = model.predict(X_pred)[0]
-            # Round to nearest valid number (1-39) and ensure no duplicates
+            # Round to nearest valid number (1-49) and ensure no duplicates
             while True:
-                num = max(1, min(39, round(pred)))
+                num = max(1, min(49, round(pred)))
                 if num not in used_numbers:
                     predictions.append(num)
                     used_numbers.add(num)
                     break
                 pred += 1
         
-        return sorted(predictions)
+        # Predict extra number (1-49 range, can be same as main numbers)
+        extra_pred = max(1, min(49, round(self.models[-1].predict(X_pred)[0])))
+        
+        # Return sorted main numbers and extra number
+        return sorted(predictions), extra_pred
 
     def analyze_patterns(self, df):
         """Analyze historical patterns with weekday consideration"""
@@ -277,7 +340,8 @@ class LotteryAnalyzer:
                 'number2': {},
                 'number3': {},
                 'number4': {},
-                'number5': {}
+                'number5': {},
+                'number6': {}
             },
             'sequential_patterns': {
                 'plus_one_sequences': [],
@@ -297,16 +361,16 @@ class LotteryAnalyzer:
                 patterns['weekday_patterns'][weekday_name] = {
                     'sequential_patterns': day_sequential_patterns,
                     'avg_numbers': [
-                        day_data[f'number{i}'].mean() for i in range(1, 6)
+                        day_data[f'number{i}'].mean() for i in range(1, 7)
                     ],
                     'most_common': [
                         day_data[f'number{i}'].value_counts().head(3).to_dict() 
-                        for i in range(1, 6)
+                        for i in range(1, 7)
                     ]
                 }
                 
                 # Add day statistics in the correct format
-                for num in range(1, 6):
+                for num in range(1, 7):
                     patterns['day_statistics'][f'number{num}'][day] = day_data[f'number{num}'].mean()
                 
                 # Update sequential patterns
@@ -355,15 +419,15 @@ if __name__ == "__main__":
     analyzer.train_models(df)
     
     # Get last numbers from the most recent draw
-    last_numbers = df.iloc[0][['number1', 'number2', 'number3', 'number4', 'number5']].values
+    last_numbers = df.iloc[0][['number1', 'number2', 'number3', 'number4', 'number5', 'number6']].values
     
     # Predict next draw
     next_date = datetime.now()
     while next_date.weekday() != 0:  # Find next Monday
         next_date += timedelta(days=1)
     
-    predictions = analyzer.predict_next_numbers(last_numbers, next_date)
-    print(f"Predicted numbers for {next_date.date()}: {predictions}")
+    predictions, extra_pred = analyzer.predict_next_numbers(last_numbers, next_date)
+    print(f"Predicted numbers for {next_date.date()}: {predictions}, Extra: {extra_pred}")
     
     # Analyze patterns
     patterns = analyzer.analyze_patterns(df)

@@ -72,6 +72,24 @@ def get_next_draw_dates(current_date=None):
     
     return next_dates
 
+def display_prediction(date, numbers, extra_number):
+    st.markdown(
+        f"""
+        <div style='padding: 20px; border-radius: 10px; background-color: #f0f2f6; margin: 10px 0;'>
+            <h3 style='color: #1f77b4; margin-bottom: 15px;'>Prediction for {date.strftime('%Y-%m-%d')}</h3>
+            <h4 style='color: #2c3e50;'>Main Numbers</h4>
+            <div style='display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 15px; justify-content: center;'>
+                {"".join(f"<span style='background-color: #1f77b4; color: white; padding: 10px; border-radius: 50%; min-width: 40px; text-align: center;'>{num}</span>" for num in numbers)}
+            </div>
+            <h4 style='color: #2c3e50;'>Extra Number</h4>
+            <div style='display: flex; justify-content: center;'>
+                <span style='background-color: #e74c3c; color: white; padding: 10px; border-radius: 50%; min-width: 40px; text-align: center;'>{extra_number}</span>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
 def main():
     st.title("Mark 6 Predictor Pro")
     
@@ -312,9 +330,9 @@ def main():
     analyzer = st.session_state.analyzer
     analyzer.train_models(st.session_state.historical_data)
     
-    # Get last numbers
+    # Get last numbers including extra number
     last_numbers = st.session_state.historical_data.iloc[0][
-        [f'number{i}' for i in range(1, 7)]
+        [f'number{i}' for i in range(1, 7)] + ['extra']
     ].values
     
     # Get next draw dates
@@ -331,10 +349,11 @@ def main():
             st.session_state.show_all_days = False
             # Only predict for the first available day initially
             next_date = next_dates[0]
-            st.session_state.current_predictions[next_date] = analyzer.predict_with_sequential_logic(
+            main_numbers, extra_number = analyzer.predict_with_sequential_logic(
                 last_numbers, 
                 datetime.combine(next_date, datetime.min.time())
             )
+            st.session_state.current_predictions[next_date] = (main_numbers, extra_number)
             st.session_state.prediction_count += 1
     
     with pred_col2:
@@ -344,19 +363,21 @@ def main():
                     # Reroll all predictions
                     st.session_state.current_predictions = {}
                     for next_date in st.session_state.predicted_dates:
-                        st.session_state.current_predictions[next_date] = analyzer.reroll_prediction(
+                        main_numbers, extra_number = analyzer.reroll_prediction(
                             last_numbers,
                             datetime.combine(next_date, datetime.min.time()),
                             st.session_state.current_predictions.get(next_date)
                         )
+                        st.session_state.current_predictions[next_date] = (main_numbers, extra_number)
                 else:
                     # Reroll only the first day
                     next_date = st.session_state.predicted_dates[0]
-                    st.session_state.current_predictions[next_date] = analyzer.reroll_prediction(
+                    main_numbers, extra_number = analyzer.reroll_prediction(
                         last_numbers,
                         datetime.combine(next_date, datetime.min.time()),
                         st.session_state.current_predictions.get(next_date)
                     )
+                    st.session_state.current_predictions[next_date] = (main_numbers, extra_number)
                 st.session_state.prediction_count += 1
     
     with pred_col3:
@@ -365,45 +386,23 @@ def main():
             # Generate predictions for all available days
             for next_date in st.session_state.predicted_dates:
                 if next_date not in st.session_state.current_predictions:
-                    st.session_state.current_predictions[next_date] = analyzer.predict_with_sequential_logic(
+                    main_numbers, extra_number = analyzer.predict_with_sequential_logic(
                         last_numbers,
                         datetime.combine(next_date, datetime.min.time())
                     )
+                    st.session_state.current_predictions[next_date] = (main_numbers, extra_number)
     
     with pred_col4:
         if st.button("Show First Day"):
             st.session_state.show_all_days = False
     
     # Display predictions
-    if st.session_state.current_predictions:
-        st.header("Current Predictions")
-        
-        # Create columns for each prediction
-        num_predictions = len(st.session_state.current_predictions)
-        cols = st.columns(min(num_predictions, 3))
-        
-        for idx, (date, prediction) in enumerate(st.session_state.current_predictions.items()):
-            if not st.session_state.show_all_days and idx > 0:
-                continue
-                
-            col_idx = idx % 3
-            with cols[col_idx]:
-                st.markdown(
-                    f"""
-                    <div style='padding: 20px; border-radius: 10px; background-color: #f0f2f6; margin: 10px 0;'>
-                        <h3 style='color: #1f77b4; margin-bottom: 15px;'>{date.strftime('%Y-%m-%d')}</h3>
-                        <h4 style='color: #2c3e50;'>Main Numbers</h4>
-                        <div style='display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 15px;'>
-                            {"".join(f"<span style='background-color: #1f77b4; color: white; padding: 10px; border-radius: 50%; min-width: 40px; text-align: center;'>{num}</span>" for num in prediction[:-1])}
-                        </div>
-                        <h4 style='color: #2c3e50;'>Extra Number</h4>
-                        <div style='display: flex; justify-content: center;'>
-                            <span style='background-color: #e74c3c; color: white; padding: 10px; border-radius: 50%; min-width: 40px; text-align: center;'>{prediction[-1]}</span>
-                        </div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True
-                )
+    if hasattr(st.session_state, 'current_predictions'):
+        st.header("Latest Predictions")
+        for date in st.session_state.predicted_dates:
+            if date in st.session_state.current_predictions:
+                main_numbers, extra_number = st.session_state.current_predictions[date]
+                display_prediction(date, main_numbers, extra_number)
     
     # Display prediction history
     if st.session_state.multiple_predictions:
