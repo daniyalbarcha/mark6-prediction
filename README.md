@@ -1,6 +1,6 @@
 # Mark 6 Lottery Predictor Pro
 
-An advanced prediction tool for Hong Kong Mark 6 lottery using machine learning and pattern analysis.
+An advanced prediction tool for Hong Kong Mark 6 lottery using machine learning and AI models (Claude, GPT-4, and Grok).
 
 ## Features
 
@@ -16,11 +16,15 @@ An advanced prediction tool for Hong Kong Mark 6 lottery using machine learning 
   - High/Low number analysis
   - Sequential pattern analysis
   
-- **Predictions**
-  - Machine learning-based predictions
-  - Support for multiple prediction methods
-  - Next draw date predictions (Tue/Thu/Sat)
-  - Main numbers and extra number predictions
+- **AI-Powered Predictions**
+  - Multiple AI model support:
+    - Claude (Anthropic)
+    - GPT-4 (OpenAI)
+    - Grok
+  - Traditional ML predictions
+  - Cost-effective caching system
+  - Confidence scoring
+  - Detailed explanations
   
 - **Visualization**
   - Interactive charts and graphs
@@ -32,36 +36,78 @@ An advanced prediction tool for Hong Kong Mark 6 lottery using machine learning 
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/daniyalbarcha/mark6-prediction.git
+   git clone https://github.com/yourusername/mark6-prediction.git
    cd mark6-prediction
    ```
 
-2. Install required packages:
+2. Create and activate a virtual environment (recommended):
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
+
+3. Install required packages:
    ```bash
    pip install -r requirements.txt
    ```
 
+4. Set up API keys:
+   - Copy `.env.example` to `.env`
+   - Add your API keys:
+     - CLAUDE_API_KEY from [Anthropic](https://www.anthropic.com/)
+     - OPENAI_API_KEY from [OpenAI](https://platform.openai.com/)
+     - GROK_API_KEY from Grok's platform
+
 ## Usage
 
-Run the Streamlit app:
-```bash
-streamlit run streamlit_app.py
-```
+1. Run the Streamlit app:
+   ```bash
+   streamlit run streamlit_app.py
+   ```
 
-The app will open in your default web browser. You can:
-1. Choose to scrape new data or upload existing data
-2. View detailed analysis and visualizations
-3. Generate predictions for upcoming draws
+2. Using AI Predictions:
+   - Toggle "Use AI for Prediction"
+   - Select your preferred AI model:
+     - Claude (~$0.50 per prediction)
+     - GPT-4 (~$0.80 per prediction)
+     - Grok (~$0.30 per prediction)
+   - Click "Generate Prediction"
+
+3. Prediction Controls:
+   - "Reroll Prediction": Generate new numbers using the same method
+   - "Show All Days": Display predictions for all upcoming draw dates
+   - "Show First Day": Display prediction for next draw only
+
+4. Bulk Analysis:
+   - Run multiple predictions to identify patterns
+   - View top 8 most frequent numbers
+   - Analyze numbers 9-20 for additional insights
+
+## Cost Management
+
+The app includes several features to manage API costs:
+
+1. **Caching System**
+   - Predictions are cached for 1 hour
+   - Reusing cached predictions incurs no additional cost
+   - Cache can be cleared manually if needed
+
+2. **Cost Tracking**
+   - Real-time cost display per prediction
+   - Session total cost tracking
+   - Cost estimates before generating predictions
+
+3. **Model Selection**
+   - Choose models based on cost-effectiveness
+   - Option to use traditional ML (no cost)
+   - Configurable model parameters in .env file
 
 ## Requirements
 
 - Python 3.8+
-- Streamlit
-- Pandas
-- Plotly
-- BeautifulSoup4
-- NumPy
-- Requests
+- API keys for chosen AI models
+- Internet connection for web scraping
+- Sufficient API credits
 
 ## Data Structure
 
@@ -80,4 +126,4 @@ MIT License - feel free to use this code for any purpose.
 
 ## Disclaimer
 
-This tool is for entertainment purposes only. Lottery predictions are based on historical data analysis and cannot guarantee future results. 
+This tool is for entertainment purposes only. Lottery predictions are based on historical data analysis and AI models but cannot guarantee future results. Use responsibly and be aware of API costs when using AI features. 
