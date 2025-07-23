@@ -116,7 +116,7 @@ def save_api_keys(claude_key, grok_key, openai_key):
                 st.session_state.context_manager.grok_client = GrokAPI(api_key=grok_key)
             if openai_key:
                 st.session_state.context_manager.openai_client = OpenAIAPI(api_key=openai_key)
-
+    
         return True
     except Exception as e:
         print(f"Error saving API keys: {str(e)}")
@@ -180,16 +180,6 @@ def settings_page():
 def main():
     st.title("Mark 6 Predictor Pro")
     
-    # Add page navigation
-    page = st.sidebar.selectbox(
-        "Select Page",
-        ["Home", "Settings"]
-    )
-    
-    if page == "Settings":
-        settings_page()
-        return
-    
     # Initialize session state
     if 'historical_data' not in st.session_state:
         st.session_state.historical_data = None
@@ -215,6 +205,16 @@ def main():
         st.session_state.prediction_history = []
     if 'models_trained' not in st.session_state:
         st.session_state.models_trained = False
+
+    # Add page navigation
+    page = st.sidebar.selectbox(
+        "Select Page",
+        ["Home", "Settings"]
+    )
+    
+    if page == "Settings":
+        settings_page()
+        return
 
     # Data Collection Section
     st.sidebar.header("Data Collection")
@@ -251,8 +251,7 @@ def main():
                             st.success("Data fetched successfully!")
                     except Exception as e:
                         st.error(f"Error fetching data: {str(e)}")
-
-        else:  # Quick Date Range
+        else:
             col1, col2 = st.sidebar.columns(2)
             with col1:
                 if st.button("Last 7 Days", key="7days_button"):
@@ -280,8 +279,7 @@ def main():
             if st.sidebar.button("Fetch Custom Range", key="custom_range_button"):
                 with st.spinner("Fetching data..."):
                     st.session_state.historical_data = handle_data_scraping(days_to_fetch)
-
-    else:  # Upload Existing Data
+    else:
         uploaded_file = st.sidebar.file_uploader("Upload CSV file", type=['csv'], key="csv_uploader")
         if uploaded_file is not None:
             try:
@@ -301,7 +299,7 @@ def main():
             except Exception as e:
                 st.error(f"Error training models: {str(e)}")
                 return
-
+    
     # Main content area
     if st.session_state.historical_data is None:
         st.info("Please load or fetch data to start analysis")
@@ -404,30 +402,31 @@ def main():
     
     with pred_col1:
         single_ai_enabled = st.toggle("Use AI for Prediction", value=False, key="single_ai_toggle")
-    
-    selected_model = "none"
-    if single_ai_enabled:
-        with pred_col2:
+        
+    with pred_col2:
+        if single_ai_enabled:
             model_options = {
                 "claude": "Claude (Cost: ~$0.50/prediction)",
                 "gpt-4": "GPT-4 (Cost: ~$0.80/prediction)",
                 "grok": "Grok (Cost: ~$0.30/prediction)"
             }
-            selected_model = st.selectbox(
+            single_selected_model = st.selectbox(
                 "Select AI Model",
                 options=list(model_options.keys()),
                 format_func=lambda x: model_options[x],
                 key="single_prediction_model"
             )
             
+            # Show appropriate cost warning based on model
             cost_warnings = {
                 "claude": "Using Claude will cost approximately $0.50 per prediction",
                 "gpt-4": "Using GPT-4 will cost approximately $0.80 per prediction",
                 "grok": "Using Grok will cost approximately $0.30 per prediction"
             }
-            st.warning(f"⚠️ {cost_warnings[selected_model]}")
-        
-        with pred_col3:
+            st.warning(f"⚠️ {cost_warnings[single_selected_model]}")
+    
+    with pred_col3:
+        if single_ai_enabled:
             st.info(f"💰 Total cost this session: ${st.session_state.total_cost:.2f}")
 
     # Generate Prediction Button
@@ -443,7 +442,7 @@ def main():
                         target_date=target_date,
                         ai_enabled=True
                     )
-                    response = st.session_state.context_manager.get_ai_prediction(model=selected_model)
+                    response = st.session_state.context_manager.get_ai_prediction(model=single_selected_model)
                     
                     main_numbers = response.prediction[:6]
                     extra_number = response.prediction[6] if len(response.prediction) > 6 else 0
@@ -456,7 +455,7 @@ def main():
                         'main_numbers': main_numbers,
                         'extra_number': extra_number,
                         'ai_enabled': True,
-                        'model': selected_model,
+                        'model': single_selected_model,
                         'cost': response.cost,
                         'explanation': response.explanation,
                         'confidence': response.confidence_score
@@ -483,7 +482,7 @@ def main():
                         ['number1', 'number2', 'number3', 'number4', 'number5', 'number6', 'extra']
                     ].values
                     main_numbers, extra_number = st.session_state.analyzer.predict_next_numbers(
-                        last_numbers,
+                        last_numbers, 
                         target_date
                     )
                     
@@ -538,41 +537,45 @@ def main():
         
         if st.button("Run Analysis", type="primary", key="bulk_analyze_button"):
             with st.spinner("Analyzing patterns..."):
-                target_date = datetime.now()
-                bulk_results = st.session_state.bulk_predictor.predict_bulk(
-                    historical_data=st.session_state.historical_data,
-                    target_date=target_date,
-                    iterations=iterations,
-                    ai_enabled=single_ai_enabled,
-                    model=selected_model if single_ai_enabled else "none"
-                )
-                
-                if single_ai_enabled:
-                    st.session_state.total_cost += bulk_results['total_cost']
-                
-                # Display results
-                st.subheader("🎯 Top 8 Most Frequent Numbers")
-                st.write(bulk_results['top_8_numbers'])
-                
-                st.subheader("📊 Numbers 9-20")
-                st.write(bulk_results['next_12_numbers'])
-                
-                # Frequency visualization
-                freq_df = pd.DataFrame(
-                    list(bulk_results['number_frequencies'].items()),
-                    columns=['Number', 'Frequency']
-                )
-                fig = px.bar(
-                    freq_df.head(20),
-                    x='Number',
-                    y='Frequency',
-                    title="Top 20 Number Frequencies"
-                )
-                st.plotly_chart(fig, use_container_width=True)
-                
-                if single_ai_enabled:
-                    st.info(f"💰 Cost for this analysis: ${bulk_results['total_cost']:.2f}")
-                    st.info(f"💰 Average cost per prediction: ${bulk_results['average_cost_per_prediction']:.3f}")
+                try:
+                    target_date = datetime.now()
+                    bulk_results = st.session_state.bulk_predictor.predict_bulk(
+                        historical_data=st.session_state.historical_data,
+                        target_date=target_date,
+                        iterations=iterations,
+                        ai_enabled=single_ai_enabled,
+                        model=single_selected_model if single_ai_enabled else "none"
+                    )
+                    
+                    if single_ai_enabled:
+                        st.session_state.total_cost += bulk_results['total_cost']
+                    
+                    # Display results
+                    st.subheader("🎯 Top 8 Most Frequent Numbers")
+                    st.write(bulk_results['top_8_numbers'])
+                    
+                    st.subheader("📊 Numbers 9-20")
+                    st.write(bulk_results['next_12_numbers'])
+                    
+                    # Frequency visualization
+                    freq_df = pd.DataFrame(
+                        list(bulk_results['number_frequencies'].items()),
+                        columns=['Number', 'Frequency']
+                    )
+                    fig = px.bar(
+                        freq_df.head(20),
+                        x='Number',
+                        y='Frequency',
+                        title="Top 20 Number Frequencies"
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+                    if single_ai_enabled:
+                        st.info(f"💰 Cost for this analysis: ${bulk_results['total_cost']:.2f}")
+                        st.info(f"💰 Average cost per prediction: ${bulk_results['average_cost_per_prediction']:.3f}")
+                except Exception as e:
+                    st.error(f"Error during bulk analysis: {str(e)}")
+                    st.error("Please try again or contact support if the issue persists.")
 
 if __name__ == "__main__":
     main()
